@@ -1,4 +1,4 @@
-import 'package:cashier/services/securityUtils.dart';
+import 'package:cashier/services/security_utils.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -23,6 +23,23 @@ class DatabaseHelper {
       version: 1,
       onCreate: _createDB,
     );
+  }
+
+  Future addUser({
+    required String userName,
+    required String password,
+  }) async {
+    final db = await instance.database;
+
+    await db.insert('users', {
+      'username': userName,
+      'password': SecurityUtils.hashPassword(password),
+      'role': 'user',
+      'isActive': 1,
+      'failedAttempts': 0,
+      'createdAt': DateTime.now().toIso8601String(),
+      'lastPasswordChange': DateTime.now().toIso8601String()
+    });
   }
 
   Future<void> _createDB(Database db, int version) async {

@@ -1,14 +1,14 @@
 import 'package:cashier/screens/admin_dashboard.dart';
 import 'package:cashier/screens/cashier_dashboard.dart';
-import 'package:cashier/services/securityUtils.dart';
 import 'package:cashier/services/database_helper.dart';
+import 'package:cashier/services/security_utils.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -18,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   final int _maxLoginAttempts = 5;
   final int _lockoutDurationMinutes = 15;
+  String? error;
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -33,7 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (users.isEmpty) {
-        _showError('Invalid credentials');
+        setState(() {
+          error = "user or password is wrong";
+          _isLoading = false;
+        });
+        _formKey.currentState!.validate(); // Trigger validation
         return;
       }
 
@@ -46,7 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
             lastAttempt.add(Duration(minutes: _lockoutDurationMinutes));
 
         if (DateTime.now().isBefore(lockoutEnd)) {
-          _showError('Account is locked. Try again later.');
+          setState(() {
+            error = 'Account is locked. Try again later.';
+            _isLoading = false;
+          });
+          _formKey.currentState!.validate(); // Trigger validation
           return;
         } else {
           // Reset failed attempts after lockout period
@@ -61,7 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Verify password
       if (!SecurityUtils.verifyPassword(
-          _passwordController.text, user['password'] as String)) {
+        _passwordController.text,
+        user['password'] as String,
+      )) {
         // Increment failed attempts
         await db.update(
           'users',
@@ -72,8 +83,11 @@ class _LoginScreenState extends State<LoginScreen> {
           where: 'id = ?',
           whereArgs: [user['id']],
         );
-
-        _showError('Invalid credentials');
+        setState(() {
+          error = 'user or password is wrong';
+          _isLoading = false;
+        });
+        _formKey.currentState!.validate(); // Trigger validation
         return;
       }
 
@@ -97,28 +111,27 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       // Navigate based on role
-      if (user['role'] == 'admin') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => AdminDashboard()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CashierDashboard()),
-        );
+      if (mounted) {
+        if (user['role'] == 'admin') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CashierDashboard()),
+          );
+        }
       }
     } catch (e) {
-      _showError('Login failed: $e');
+      const SnackBar(content: Text('An error occurred. Please try again.'));
+      setState(() {
+        _isLoading = false;
+      });
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -136,10 +149,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'POS System Login',
+                    'Login',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 34,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 26,
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -151,6 +165,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: (value) =>
                         value?.isEmpty ?? true ? 'Required' : null,
+                    onChanged: (value) {
+                      setState(() {
+                        error = null;
+                      });
+
+                      _formKey.currentState!.validate();
+                    },
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -161,7 +182,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     obscureText: true,
                     validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
+                        value?.isEmpty ?? true ? 'Required' : error,
+                    onChanged: (value) {
+                      setState(() {
+                        error = null;
+                      });
+                      _formKey.currentState!.validate();
+                    },
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
