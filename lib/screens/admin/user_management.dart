@@ -1,4 +1,5 @@
 import 'package:cashier/services/database_helper.dart';
+import 'package:cashier/widgets/password_resest_dialog.dart';
 import 'package:flutter/material.dart';
 
 class UserManagement extends StatefulWidget {
@@ -10,110 +11,69 @@ class UserManagement extends StatefulWidget {
 
 class _UserManagementState extends State<UserManagement> {
   List<Map<String, dynamic>> users = [];
-
-  @override
-  void initState() {
-    super.initState();
-    loadUsers();
-  }
+  TextEditingController userController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
 
   Future<void> resetPassword(int userId) async {
-    TextEditingController oldPasswordController = TextEditingController();
-    TextEditingController newPasswordController = TextEditingController();
-    bool oldPasswordObscure = true;
-    bool newPasswordObscure = true;
     final db = await DatabaseHelper.instance.database;
     if (!mounted) return;
     showDialog(
       context: context,
-      builder: (context) {
-        return Form(
-          child: AlertDialog(
-            title: const Text('Reset Password'),
-            content: SingleChildScrollView(
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: oldPasswordController,
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
-                    decoration: InputDecoration(
-                      labelText: 'Old Password',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          oldPasswordObscure
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            oldPasswordObscure = !oldPasswordObscure;
-                          });
-                        },
-                      ),
-                    ),
-                    obscureText: oldPasswordObscure,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
-                    controller: newPasswordController,
-                    decoration: InputDecoration(
-                      labelText: 'New Password',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        onPressed: () {
-                          setState(() {
-                            newPasswordObscure = !newPasswordObscure;
-                          });
-                        },
-                        icon: Icon(
-                          newPasswordObscure
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                      ),
-                    ),
-                    obscureText: newPasswordObscure,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await db.update(
-                    'users',
-                    {'password': newPasswordController.text},
-                    where: 'id = ?',
-                    whereArgs: [userId],
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Password reset successfully')),
-                  );
-                  Navigator.pop(context);
-                },
-                child: const Text('Reset Password'),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => PasswordResetDialog(userId: userId, db: db),
     );
   }
 
   Future<void> loadUsers() async {
     final db = await DatabaseHelper.instance.database;
-    final users =
+    final fetchUsers =
         await db.query('users', where: 'role != ?', whereArgs: ['admin']);
-    setState(() => this.users = users);
+    setState(() => users = fetchUsers);
+  }
+
+  Future<void> viewLoginHistory(context, int userId) async {
+    final db = await DatabaseHelper.instance.database;
+
+    final attempts = await db.query(
+      'login_attempts',
+      where: 'userId = ?',
+      whereArgs: [userId],
+      orderBy: 'attemptTime DESC',
+      limit: 31,
+    );
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Login History'),
+          content: SizedBox(
+            width: 400,
+            height: 300,
+            child: ListView.builder(
+              itemCount: attempts.length,
+              itemBuilder: (context, index) {
+                final attempt = attempts[index];
+                return ListTile(
+                  leading: Icon(
+                    attempt['success'] == 1 ? Icons.check_circle : Icons.error,
+                    color: attempt['success'] == 1 ? Colors.green : Colors.red,
+                  ),
+                  title: Text("${attempt['attemptTime']}"),
+                  subtitle: Text(attempt['success'] == 1
+                      ? 'Successful login'
+                      : 'Failed attempt'),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> updateUserActive({active, userid}) async {
@@ -126,8 +86,12 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  TextEditingController userController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    loadUsers();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -260,7 +224,9 @@ class _UserManagementState extends State<UserManagement> {
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.password),
-                                  onPressed: () => resetPassword(user['id']),
+                                  onPressed: () {
+                                    resetPassword(user['id']);
+                                  },
                                 ),
                                 Switch(
                                   value: user['isActive'] == 1,
@@ -270,6 +236,43 @@ class _UserManagementState extends State<UserManagement> {
                                       userid: user['id'],
                                     );
                                     loadUsers();
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red[900],
+                                  ),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Delete User'),
+                                        content: const Text(
+                                            'Are you sure you want to delete this user?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () async {
+                                              Navigator.pop(context);
+                                              final db = await DatabaseHelper
+                                                  .instance.database;
+                                              await db.delete(
+                                                'users',
+                                                where: 'id = ?',
+                                                whereArgs: [user['id']],
+                                              );
+                                              loadUsers();
+                                            },
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
                                   },
                                 ),
                               ],
@@ -286,51 +289,5 @@ class _UserManagementState extends State<UserManagement> {
         ),
       ],
     );
-  }
-
-  Future<void> viewLoginHistory(context, int userId) async {
-    final db = await DatabaseHelper.instance.database;
-    final attempts = await db.query(
-      'login_attempts',
-      where: 'userId = ?',
-      whereArgs: [userId],
-      orderBy: 'attemptTime DESC',
-      limit: 10,
-    );
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Login History'),
-          content: SizedBox(
-            width: 400,
-            height: 300,
-            child: ListView.builder(
-              itemCount: attempts.length,
-              itemBuilder: (context, index) {
-                final attempt = attempts[index];
-                return ListTile(
-                  leading: Icon(
-                    attempt['success'] == 1 ? Icons.check_circle : Icons.error,
-                    color: attempt['success'] == 1 ? Colors.green : Colors.red,
-                  ),
-                  title: Text(DateTime.parse(attempt['attemptTime'] as String)
-                      .toString()),
-                  subtitle: Text(attempt['success'] == 1
-                      ? 'Successful login'
-                      : 'Failed attempt'),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    }
   }
 }

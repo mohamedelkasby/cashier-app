@@ -1,4 +1,5 @@
 import 'package:cashier/services/security_utils.dart';
+import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -20,8 +21,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -37,9 +39,55 @@ class DatabaseHelper {
       'role': 'user',
       'isActive': 1,
       'failedAttempts': 0,
-      'createdAt': DateTime.now().toIso8601String(),
-      'lastPasswordChange': DateTime.now().toIso8601String()
+      'createdAt': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'lastPasswordChange':
+          DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
     });
+  }
+
+  Future addProduct({
+    required String productName,
+    required String serialNumber,
+    required double price,
+  }) async {
+    final db = await instance.database;
+
+    await db.insert('products', {
+      'productName': productName,
+      'serialNumber': serialNumber,
+      'price': price,
+      'createdAt': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'updatedAt': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+    });
+  }
+
+  Future updateProduct({
+    required int id,
+    required String productName,
+    required String serialNumber,
+    required double price,
+  }) async {
+    final db = await instance.database;
+
+    await db.update(
+      'products',
+      {
+        'productName': productName,
+        'serialNumber': serialNumber,
+        'price': price,
+        'updatedAt': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future deleteProduct({
+    required int id,
+  }) async {
+    final db = await instance.database;
+
+    await db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -55,6 +103,18 @@ class DatabaseHelper {
       lastLoginAttempt TEXT,
       createdAt TEXT NOT NULL,
       lastPasswordChange TEXT NOT NULL
+    )
+    ''');
+
+    // products table
+    await db.execute('''
+    CREATE TABLE products(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      productName TEXT NOT NULL UNIQUE,
+      serialNumber TEXT NOT NULL UNIQUE,
+      price REAL NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
     )
     ''');
 
@@ -78,8 +138,24 @@ class DatabaseHelper {
       'role': 'admin',
       'isActive': 1,
       'failedAttempts': 0,
-      'createdAt': DateTime.now().toIso8601String(),
-      'lastPasswordChange': DateTime.now().toIso8601String()
+      'createdAt': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'lastPasswordChange':
+          DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
     });
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE products(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          productName TEXT NOT NULL UNIQUE,
+          serialNumber TEXT NOT NULL UNIQUE,
+          price REAL NOT NULL,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
+    }
   }
 }

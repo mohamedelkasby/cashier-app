@@ -1,5 +1,6 @@
+import 'package:cashier/screens/admin/add_products.dart';
 import 'package:cashier/screens/login_screen.dart';
-import 'package:cashier/screens/user_management.dart';
+import 'package:cashier/screens/admin/user_management.dart';
 import 'package:flutter/material.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -44,6 +45,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 label: Text('Users'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.production_quantity_limits_outlined),
+                label: Text('products'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.analytics),
                 label: Text('Reports'),
               ),
@@ -65,10 +70,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildContent() {
     switch (_selectedIndex) {
       case 0:
-        return UserManagement();
+        return const UserManagement();
       case 1:
-        return _buildReports();
+        return const AddProducts();
       case 2:
+        return _buildReports();
+      case 3:
         return _buildSettings();
       default:
         return const Center(child: Text('Unknown page'));

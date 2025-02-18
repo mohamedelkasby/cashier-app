@@ -1,8 +1,9 @@
-import 'package:cashier/screens/admin_dashboard.dart';
+import 'package:cashier/screens/admin/admin_dashboard.dart';
 import 'package:cashier/screens/cashier_dashboard.dart';
 import 'package:cashier/services/database_helper.dart';
 import 'package:cashier/services/security_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -105,10 +106,33 @@ class _LoginScreenState extends State<LoginScreen> {
       // Log successful login attempt
       await db.insert('login_attempts', {
         'userId': user['id'],
-        'attemptTime': DateTime.now().toIso8601String(),
+        'attemptTime':
+            DateFormat('yyyy-MM-dd   hh:mm a').format(DateTime.now()),
         'success': 1,
         'ipAddress': 'local'
       });
+
+      // Check if user is active
+      if (user['isActive'] == 0 && mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Access Denied'),
+            content: const Text(
+                'User is not allowed to access. Please contact the admin.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
 
       // Navigate based on role
       if (mounted) {
